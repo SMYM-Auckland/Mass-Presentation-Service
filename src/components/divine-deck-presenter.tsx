@@ -55,29 +55,26 @@ export default function DivineDeckPresenter() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingSlide, setEditingSlide] = useState<Slide | null>(null);
   const [selectedSlides, setSelectedSlides] = useState<Set<string>>(new Set());
+  const [isCreatingNewSlide, setIsCreatingNewSlide] = useState(false);
+  const [newSlideLocation, setNewSlideLocation] = useState<{deckId: string, sectionId: string} | null>(null);
 
   const channelRef = useRef<BroadcastChannel>();
   const projectorWindowRef = useRef<Window | null>(null);
 
   useEffect(() => {
-    // Load initial data and setups
     setDecks(mockDecks);
     const savedSetups = localStorage.getItem('divineDeckSetups');
     if (savedSetups) {
       setSetups(JSON.parse(savedSetups));
     }
-
-    // Initialize BroadcastChannel
     const channel = new BroadcastChannel('divine-deck');
     channelRef.current = channel;
-
     const handleMessage = (event: MessageEvent) => {
         if (event.data.type === 'REQUEST_SLIDE' && currentIndex >= 0) {
             channel.postMessage({ type: 'SLIDE_CHANGE', slide: queue[currentIndex] });
         }
     };
     channel.addEventListener('message', handleMessage);
-
     return () => {
       channel.close();
     };
@@ -104,27 +101,17 @@ export default function DivineDeckPresenter() {
 
   const searchResults = useMemo(() => {
     if (!searchTerm) return [];
-    
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    
-    const results: (
-      { type: 'section'; data: Section; source: string; } |
-      { type: 'slide'; data: Slide; }
-    )[] = [];
-
-    const addedItems = new Set<string>(); // To avoid duplicates
-
+    const results: ({ type: 'section'; data: Section; source: string; } | { type: 'slide'; data: Slide; })[] = [];
+    const addedItems = new Set<string>();
     decks.forEach(deck => {
       deck.sections.forEach(section => {
-        // Match section title
         if (section.title.toLowerCase().includes(lowerCaseSearchTerm)) {
           if (!addedItems.has(`section-${section.id}`)) {
             results.push({ type: 'section', data: section, source: deck.fileName });
             addedItems.add(`section-${section.id}`);
           }
         }
-        
-        // Match slides within section
         section.slides.forEach(slide => {
           if (slide.title.toLowerCase().includes(lowerCaseSearchTerm) || slide.contents.join(' ').toLowerCase().includes(lowerCaseSearchTerm)) {
             if (!addedItems.has(`slide-${slide.id}`)) {
@@ -135,8 +122,6 @@ export default function DivineDeckPresenter() {
         });
       });
     });
-
-    // Match verses
     mockVerses.forEach(verse => {
       if (verse.title.toLowerCase().includes(lowerCaseSearchTerm) || (verse.contents && verse.contents.join(' ').toLowerCase().includes(lowerCaseSearchTerm))) {
          if (!addedItems.has(`slide-${verse.id}`)) {
@@ -145,7 +130,6 @@ export default function DivineDeckPresenter() {
          }
       }
     });
-
     return results;
   }, [searchTerm, decks]);
 
@@ -169,10 +153,7 @@ export default function DivineDeckPresenter() {
   };
 
   const handleAddSectionToQueue = (section: Section) => {
-    const newItems: QueueItem[] = section.slides.map(slide => ({
-      ...slide,
-      queueId: `q-${Date.now()}-${Math.random()}-${slide.id}`
-    }));
+    const newItems: QueueItem[] = section.slides.map(slide => ({ ...slide, queueId: `q-${Date.now()}-${Math.random()}-${slide.id}` }));
     setQueue(prev => [...prev, ...newItems]);
     toast({ title: `Added all ${section.slides.length} slides from "${section.title}".` });
   };
@@ -180,17 +161,12 @@ export default function DivineDeckPresenter() {
   const handleRemoveFromQueue = (queueId: string) => {
     const currentSlideQueueId = queue[currentIndex]?.queueId;
     const newQueue = queue.filter(p => p.queueId !== queueId);
-    
     if (currentSlideQueueId && currentSlideQueueId !== queueId) {
         const newIndex = newQueue.findIndex(p => p.queueId === currentSlideQueueId);
         setCurrentIndex(newIndex);
     } else {
-        // Current slide was deleted or no slide was active.
-        // Clamp the index to stay within the new array's bounds.
-        // This keeps the position stable, unless the last item was removed.
         setCurrentIndex(prev => Math.min(prev, newQueue.length - 1));
     }
-
     setQueue(newQueue);
   };
   
@@ -209,12 +185,7 @@ export default function DivineDeckPresenter() {
   const handleSaveSetup = () => {
     const name = prompt("Enter a name for this setup:", `Mass ${new Date().toLocaleDateString()}`);
     if (name) {
-      const newSetup: MassSetup = {
-        id: `setup-${Date.now()}`,
-        name,
-        queue,
-        createdAt: new Date().toISOString(),
-      };
+      const newSetup: MassSetup = { id: `setup-${Date.now()}`, name, queue, createdAt: new Date().toISOString() };
       const updatedSetups = [...setups, newSetup];
       setSetups(updatedSetups);
       localStorage.setItem('divineDeckSetups', JSON.stringify(updatedSetups));
@@ -231,7 +202,42 @@ export default function DivineDeckPresenter() {
     }
   };
 
+  const handleAddNewSection = (deckId: string) => {
+    const sectionName = prompt('Enter name for the new section:');
+    if (sectionName && sectionName.trim() !== '') {
+        const newSection: Section = {
+            id: `sec-${Date.now()}`,
+            title: sectionName.trim(),
+            slides: [],
+        };
+        setDecks(prevDecks => prevDecks.map(deck => {
+            if (deck.id === deckId) {
+                return { ...deck, sections: [...deck.sections, newSection] };
+            }
+            return deck;
+        }));
+        toast({ title: 'Section Created', description: `"${sectionName.trim()}" was added.` });
+    }
+  };
+
+  const handleNewSlide = (deckId: string, sectionId: string) => {
+      setIsCreatingNewSlide(true);
+      setNewSlideLocation({ deckId, sectionId });
+      const deck = decks.find(d => d.id === deckId);
+      setEditingSlide({
+          id: `temp-${Date.now()}`,
+          title: 'New Slide',
+          contents: [''],
+          layoutType: '1-col',
+          notes: '',
+          type: 'slide',
+          source: deck ? deck.fileName : 'Custom',
+      });
+      setIsEditorOpen(true);
+  };
+
   const handleEditSlide = (slide: Slide) => {
+    setIsCreatingNewSlide(false);
     const slideToEdit = {
         ...slide,
         contents: Array.isArray(slide.contents) && slide.contents.length > 0 ? slide.contents : [''],
@@ -241,76 +247,77 @@ export default function DivineDeckPresenter() {
     setIsEditorOpen(true);
   };
   
-  const handleUpdateSlide = (updatedSlide: Slide | null) => {
-    if (!updatedSlide) return;
+  const handleSaveSlide = () => {
+    if (!editingSlide) return;
 
-    const updateInArray = (arr: QueueItem[]) => arr.map(s => s.id === updatedSlide.id ? { ...s, ...updatedSlide } : s);
-    setQueue(updateInArray);
-    
-    const newDecks = decks.map(deck => ({
-        ...deck,
-        sections: deck.sections.map(section => ({
-            ...section,
-            slides: section.slides.map(s => s.id === updatedSlide.id ? updatedSlide : s)
-        }))
-    }));
-    setDecks(newDecks);
+    if (isCreatingNewSlide && newSlideLocation) {
+        const newSlide = { ...editingSlide, id: `s-${Date.now()}` };
+        setDecks(prevDecks => prevDecks.map(deck => {
+            if (deck.id === newSlideLocation.deckId) {
+                const newSections = deck.sections.map(section => {
+                    if (section.id === newSlideLocation.sectionId) {
+                        return { ...section, slides: [...section.slides, newSlide] };
+                    }
+                    return section;
+                });
+                return { ...deck, sections: newSections };
+            }
+            return deck;
+        }));
+        toast({ title: "Slide Created", description: `"${newSlide.title}" has been saved.`});
+    } else {
+        const updateInArray = (arr: QueueItem[]) => arr.map(s => s.id === editingSlide.id ? { ...s, ...editingSlide } : s);
+        setQueue(updateInArray);
+        const newDecks = decks.map(deck => ({
+            ...deck,
+            sections: deck.sections.map(section => ({
+                ...section,
+                slides: section.slides.map(s => s.id === editingSlide.id ? editingSlide : s)
+            }))
+        }));
+        setDecks(newDecks);
+        toast({ title: "Slide Updated", description: `Changes to "${editingSlide.title}" have been saved.`});
+    }
     
     setIsEditorOpen(false);
     setEditingSlide(null);
-    toast({ title: "Slide Updated", description: `Changes to "${updatedSlide.title}" have been saved.`});
+    setIsCreatingNewSlide(false);
+    setNewSlideLocation(null);
   };
 
   const handleLayoutChange = (newLayout: LayoutType) => {
     if (!editingSlide) return;
-
     const numSections = { '1-col': 1, '2-col': 2, '3-col': 3, '4-quad': 4 }[newLayout];
     const currentContents = editingSlide.contents || [''];
     const newContents = Array.from({ length: numSections }, (_, i) => currentContents[i] || '');
-
-    setEditingSlide({
-        ...editingSlide,
-        layoutType: newLayout,
-        contents: newContents,
-    });
+    setEditingSlide({ ...editingSlide, layoutType: newLayout, contents: newContents });
   };
 
   const handleToggleSelection = (queueId: string, checked: boolean) => {
     setSelectedSlides(prev => {
         const newSet = new Set(prev);
-        if (checked) {
-            newSet.add(queueId);
-        } else {
-            newSet.delete(queueId);
-        }
+        if (checked) newSet.add(queueId);
+        else newSet.delete(queueId);
         return newSet;
     });
   };
 
   const handleToggleSelectAll = (checked: boolean) => {
-      if (checked) {
-          setSelectedSlides(new Set(queue.map(item => item.queueId)));
-      } else {
-          setSelectedSlides(new Set());
-      }
+      if (checked) setSelectedSlides(new Set(queue.map(item => item.queueId)));
+      else setSelectedSlides(new Set());
   };
 
   const handleBulkDelete = () => {
     const deletedCount = selectedSlides.size;
     if (deletedCount === 0) return;
-
     const currentSlideQueueId = queue[currentIndex]?.queueId;
     const newQueue = queue.filter(item => !selectedSlides.has(item.queueId));
-
     if (currentSlideQueueId && !selectedSlides.has(currentSlideQueueId)) {
         const newIndex = newQueue.findIndex(p => p.queueId === currentSlideQueueId);
         setCurrentIndex(newIndex);
     } else {
-        // Current slide was deleted or no slide was active.
-        // Clamp the index to stay within the new array's bounds.
         setCurrentIndex(prev => Math.min(prev, newQueue.length - 1));
     }
-
     setQueue(newQueue);
     setSelectedSlides(new Set());
     toast({ title: "Slides removed", description: `${deletedCount} slides removed from the queue.`});
@@ -318,9 +325,7 @@ export default function DivineDeckPresenter() {
 
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -333,6 +338,15 @@ export default function DivineDeckPresenter() {
       });
     }
   };
+  
+  const handleEditorOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+        setEditingSlide(null);
+        setIsCreatingNewSlide(false);
+        setNewSlideLocation(null);
+    }
+    setIsEditorOpen(isOpen);
+  };
 
   const SlideDisplay = ({ slide, className, isNext }: { slide: Slide | null, className?: string, isNext?: boolean }) => {
     const getLayoutClass = (layoutType: LayoutType | undefined) => {
@@ -344,9 +358,7 @@ export default function DivineDeckPresenter() {
             default: return 'flex flex-col items-center justify-center text-center gap-4';
         }
     };
-
     const getParagraphClass = (layoutType: LayoutType | undefined, isNext?: boolean) => {
-        // isNext adjusts size for the "Next Slide" preview
         switch (layoutType) {
             case '2-col': return isNext ? 'text-base' : 'text-2xl';
             case '3-col': return isNext ? 'text-sm' : 'text-xl';
@@ -354,7 +366,6 @@ export default function DivineDeckPresenter() {
             default: return isNext ? 'text-lg' : 'text-3xl';
         }
     };
-    
     return (
         <Card className={`flex flex-col overflow-hidden transition-all duration-300 ${className}`}>
             <CardHeader className="shrink-0">
@@ -397,9 +408,7 @@ export default function DivineDeckPresenter() {
                         <Button variant="outline" size="sm"><FolderOpen className="mr-2 h-4 w-4"/> Load Setup</Button>
                     </DialogTrigger>
                     <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Load a Previous Setup</DialogTitle>
-                        </DialogHeader>
+                        <DialogHeader><DialogTitle>Load a Previous Setup</DialogTitle></DialogHeader>
                         <ScrollArea className="max-h-96">
                             <div className="flex flex-col gap-2 p-4">
                             {setups.length > 0 ? setups.map(s => (
@@ -419,7 +428,6 @@ export default function DivineDeckPresenter() {
         </header>
 
         <div className="flex flex-1 min-h-0">
-            {/* Main Content */}
             <main className="flex-[3] flex flex-col p-4 gap-4">
                 <AnimatePresence mode="wait">
                     <motion.div key={currentSlide?.id || 'empty'} initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-20}} transition={{duration: 0.3}} className="flex-1 flex flex-col relative">
@@ -427,7 +435,6 @@ export default function DivineDeckPresenter() {
                        {currentSlide && <Button size="icon" variant="ghost" className="absolute top-4 right-4" onClick={() => handleEditSlide(currentSlide)}><Edit className="h-5 w-5"/></Button>}
                     </motion.div>
                 </AnimatePresence>
-
                 <div className="grid grid-cols-2 gap-4 h-1/3">
                     <div className="flex flex-col gap-2">
                         <h3 className="font-bold font-headline text-lg">Next Slide</h3>
@@ -435,16 +442,9 @@ export default function DivineDeckPresenter() {
                     </div>
                     <div className="flex flex-col gap-2">
                         <h3 className="font-bold font-headline text-lg flex items-center gap-2"><Mic className="h-5 w-5"/> Speaker Notes</h3>
-                        <Card className="flex-1">
-                            <ScrollArea className="h-full">
-                                <CardContent className="p-4 text-sm">
-                                    {currentSlide?.notes || <p className="text-muted-foreground">No notes for this slide.</p>}
-                                </CardContent>
-                            </ScrollArea>
-                        </Card>
+                        <Card className="flex-1"><ScrollArea className="h-full"><CardContent className="p-4 text-sm">{currentSlide?.notes || <p className="text-muted-foreground">No notes for this slide.</p>}</CardContent></ScrollArea></Card>
                     </div>
                 </div>
-
                 <div className="flex items-center justify-center p-2 border-t gap-4">
                     <div className="flex items-center gap-2" onClick={() => setIsTimerRunning(!isTimerRunning)}>
                         <Clock className="h-6 w-6 text-primary cursor-pointer"/>
@@ -456,53 +456,23 @@ export default function DivineDeckPresenter() {
                 </div>
             </main>
 
-            {/* Sidebar */}
             <aside className="w-[420px] border-l flex flex-col">
                 <div className="p-4 border-b">
                     <div className="flex justify-between items-center mb-2">
                         <h2 className="text-xl font-bold font-headline">Live Queue</h2>
-                        {selectedSlides.size > 0 && (
-                            <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedSlides.size})
-                            </Button>
-                        )}
+                        {selectedSlides.size > 0 && (<Button variant="destructive" size="sm" onClick={handleBulkDelete}><Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedSlides.size})</Button>)}
                     </div>
                     <div className="flex items-center space-x-2">
-                        <Checkbox
-                            id="select-all"
-                            onCheckedChange={(checked) => handleToggleSelectAll(Boolean(checked))}
-                            checked={queue.length > 0 && selectedSlides.size === queue.length}
-                            disabled={queue.length === 0}
-                        />
-                        <label htmlFor="select-all" className="text-sm font-medium leading-none text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                           {queue.length} items in queue.
-                        </label>
+                        <Checkbox id="select-all" onCheckedChange={(checked) => handleToggleSelectAll(Boolean(checked))} checked={queue.length > 0 && selectedSlides.size === queue.length} disabled={queue.length === 0} />
+                        <label htmlFor="select-all" className="text-sm font-medium leading-none text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{queue.length} items in queue.</label>
                     </div>
                 </div>
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                >
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <ScrollArea className="flex-1">
-                        <SortableContext
-                            items={queue.map(i => i.queueId)}
-                            strategy={verticalListSortingStrategy}
-                        >
+                        <SortableContext items={queue.map(i => i.queueId)} strategy={verticalListSortingStrategy}>
                             <div className="p-2 flex flex-col gap-1">
                                 {queue.map((item, index) => (
-                                    <QueueItemCard
-                                        key={item.queueId}
-                                        item={item}
-                                        index={index}
-                                        isCurrent={currentIndex === index}
-                                        isSelected={selectedSlides.has(item.queueId)}
-                                        onSelect={() => setCurrentIndex(index)}
-                                        onToggleSelection={handleToggleSelection}
-                                        onMove={handleMoveInQueue}
-                                        onRemove={handleRemoveFromQueue}
-                                        queueLength={queue.length}
-                                    />
+                                    <QueueItemCard key={item.queueId} item={item} index={index} isCurrent={currentIndex === index} isSelected={selectedSlides.has(item.queueId)} onSelect={() => setCurrentIndex(index)} onToggleSelection={handleToggleSelection} onMove={handleMoveInQueue} onRemove={handleRemoveFromQueue} queueLength={queue.length} />
                                 ))}
                             </div>
                         </SortableContext>
@@ -521,23 +491,15 @@ export default function DivineDeckPresenter() {
                           if (result.type === 'slide') {
                             return (
                               <Card key={`search-slide-${result.data.id}-${index}`} className="p-2 flex items-center gap-2">
-                                  <div className="flex-1">
-                                      <p className="font-semibold truncate">{result.data.title}</p>
-                                      <p className="text-xs text-muted-foreground">{result.data.source}</p>
-                                  </div>
+                                  <div className="flex-1"><p className="font-semibold truncate">{result.data.title}</p><p className="text-xs text-muted-foreground">{result.data.source}</p></div>
                                   <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAddToQueue(result.data)}><Plus className="h-4 w-4"/></Button>
                               </Card>
                             )
-                          } else { // result.type === 'section'
+                          } else {
                             return (
                               <Card key={`search-section-${result.data.id}-${index}`} className="p-2 flex items-center gap-2 bg-primary/10 border-primary/50">
-                                <div className="flex-1">
-                                    <p className="font-semibold truncate">{result.data.title}</p>
-                                    <p className="text-xs text-muted-foreground">{result.source} &bull; {result.data.slides.length} slides</p>
-                                </div>
-                                <Button variant="outline" size="sm" className="h-8" onClick={() => handleAddSectionToQueue(result.data)}>
-                                    <Plus className="h-4 w-4 mr-1.5"/> Add All
-                                </Button>
+                                <div className="flex-1"><p className="font-semibold truncate">{result.data.title}</p><p className="text-xs text-muted-foreground">{result.source} &bull; {result.data.slides.length} slides</p></div>
+                                <Button variant="outline" size="sm" className="h-8" onClick={() => handleAddSectionToQueue(result.data)}><Plus className="h-4 w-4 mr-1.5"/> Add All</Button>
                               </Card>
                             )
                           }
@@ -549,20 +511,19 @@ export default function DivineDeckPresenter() {
                             <AccordionItem value={deck.id} key={deck.id}>
                                 <AccordionTrigger>{deck.fileName}</AccordionTrigger>
                                 <AccordionContent>
+                                    <div className="px-4 pb-2">
+                                        <Button size="sm" variant="outline" className="w-full" onClick={() => handleAddNewSection(deck.id)}>
+                                            <Plus className="mr-2 h-4 w-4"/> Add New Section
+                                        </Button>
+                                    </div>
                                     {deck.sections.map(section => (
                                     <Accordion type="single" collapsible className="w-full pl-4" key={section.id}>
                                         <AccordionItem value={section.id}>
                                             <AccordionTrigger>{section.title}</AccordionTrigger>
                                             <AccordionContent>
-                                                <div className="px-1 py-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="w-full"
-                                                        onClick={() => handleAddSectionToQueue(section)}
-                                                    >
-                                                        <Plus className="mr-2 h-4 w-4"/> Add All ({section.slides.length}) to Queue
-                                                    </Button>
+                                                <div className="px-1 py-2 flex flex-col gap-2">
+                                                    <Button size="sm" variant="outline" className="w-full" onClick={() => handleAddSectionToQueue(section)}><Plus className="mr-2 h-4 w-4"/> Add All ({section.slides.length}) to Queue</Button>
+                                                    <Button size="sm" variant="outline" className="w-full" onClick={() => handleNewSlide(deck.id, section.id)}><FilePlus className="mr-2 h-4 w-4"/> Add New Slide</Button>
                                                 </div>
                                                 {section.slides.map(slide => (
                                                 <div key={slide.id} className="flex items-center gap-2 p-1 rounded hover:bg-muted">
@@ -586,11 +547,11 @@ export default function DivineDeckPresenter() {
         </div>
 
         {editingSlide && (
-            <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+            <Dialog open={isEditorOpen} onOpenChange={handleEditorOpenChange}>
                 <DialogContent className="sm:max-w-3xl">
                     <DialogHeader>
-                        <DialogTitle>Edit Slide</DialogTitle>
-                        <CardDescription>Make live changes to the slide content, layout, and notes.</CardDescription>
+                        <DialogTitle>{isCreatingNewSlide ? 'Create New Slide' : 'Edit Slide'}</DialogTitle>
+                        <CardDescription>Make changes to the slide content, layout, and notes.</CardDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
@@ -599,13 +560,8 @@ export default function DivineDeckPresenter() {
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="layout-select">Layout</Label>
-                            <Select
-                                value={editingSlide.layoutType}
-                                onValueChange={(value: LayoutType) => handleLayoutChange(value)}
-                            >
-                                <SelectTrigger id="layout-select" className="w-[180px]">
-                                    <SelectValue placeholder="Select a layout" />
-                                </SelectTrigger>
+                            <Select value={editingSlide.layoutType} onValueChange={(value: LayoutType) => handleLayoutChange(value)}>
+                                <SelectTrigger id="layout-select" className="w-[180px]"><SelectValue placeholder="Select a layout" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="1-col">1 Column</SelectItem>
                                     <SelectItem value="2-col">2 Columns</SelectItem>
@@ -614,17 +570,11 @@ export default function DivineDeckPresenter() {
                                 </SelectContent>
                             </Select>
                         </div>
-
                         <Separator/>
-                        
                         <Label>Content Sections</Label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {editingSlide.contents.map((content, index) => (
-                                <Textarea
-                                    key={index}
-                                    placeholder={`Section ${index + 1} content...`}
-                                    className="min-h-32"
-                                    value={content}
+                                <Textarea key={index} placeholder={`Section ${index + 1} content...`} className="min-h-32" value={content}
                                     onChange={e => {
                                         if (!editingSlide) return;
                                         const newContents = [...editingSlide.contents];
@@ -634,9 +584,7 @@ export default function DivineDeckPresenter() {
                                 />
                             ))}
                         </div>
-                        
                         <Separator/>
-
                         <div className="grid gap-2">
                             <Label htmlFor="slide-notes">Speaker Notes</Label>
                             <Textarea id="slide-notes" placeholder="Speaker notes..." value={editingSlide.notes || ''} onChange={e => setEditingSlide(s => s ? {...s, notes: e.target.value} : null)}/>
@@ -644,7 +592,7 @@ export default function DivineDeckPresenter() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditorOpen(false)}>Cancel</Button>
-                        <Button onClick={() => handleUpdateSlide(editingSlide)}>Save Changes</Button>
+                        <Button onClick={handleSaveSlide}>Save Changes</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -654,37 +602,16 @@ export default function DivineDeckPresenter() {
 }
 
 function QueueItemCard({ item, index, isCurrent, isSelected, onSelect, onToggleSelection, onMove, onRemove, queueLength }: {
-    item: QueueItem;
-    index: number;
-    isCurrent: boolean;
-    isSelected: boolean;
-    onSelect: () => void;
-    onToggleSelection: (id: string, checked: boolean) => void;
-    onMove: (index: number, direction: 'up' | 'down') => void;
-    onRemove: (id: string) => void;
-    queueLength: number;
+    item: QueueItem; index: number; isCurrent: boolean; isSelected: boolean; onSelect: () => void; onToggleSelection: (id: string, checked: boolean) => void; onMove: (index: number, direction: 'up' | 'down') => void; onRemove: (id: string) => void; queueLength: number;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.queueId });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-    };
-
+    const style = { transform: CSS.Transform.toString(transform), transition };
     return (
         <div ref={setNodeRef} style={style}>
             <Card className={`p-2 flex items-center gap-2 transition-all ${isCurrent ? 'bg-primary/10 border-primary' : ''}`}>
-                <div {...attributes} {...listeners} className="cursor-grab touch-none p-1">
-                    <GripVertical className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={(checked) => onToggleSelection(item.queueId, Boolean(checked))}
-                />
-                <div className="flex-1 cursor-pointer" onClick={onSelect}>
-                    <p className="font-semibold truncate">{item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.source}</p>
-                </div>
+                <div {...attributes} {...listeners} className="cursor-grab touch-none p-1"><GripVertical className="h-5 w-5 text-muted-foreground" /></div>
+                <Checkbox checked={isSelected} onCheckedChange={(checked) => onToggleSelection(item.queueId, Boolean(checked))} />
+                <div className="flex-1 cursor-pointer" onClick={onSelect}><p className="font-semibold truncate">{item.title}</p><p className="text-xs text-muted-foreground">{item.source}</p></div>
                 <div className="flex flex-col">
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onMove(index, 'up')} disabled={index === 0}><ChevronUp className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onMove(index, 'down')} disabled={index === queueLength - 1}><ChevronDown className="h-4 w-4" /></Button>
@@ -695,14 +622,5 @@ function QueueItemCard({ item, index, isCurrent, isSelected, onSelect, onToggleS
     );
 }
 
-// Minimal Framer Motion for smooth transitions
-const framer = {
-    install: () => {
-        try {
-            require('framer-motion');
-        } catch (e) {
-            // This is a dev-time check
-        }
-    }
-};
+const framer = { install: () => { try { require('framer-motion'); } catch (e) {} } };
 framer.install();
