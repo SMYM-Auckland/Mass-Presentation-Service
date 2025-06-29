@@ -219,6 +219,28 @@ export default function DivineDeckPresenter() {
         toast({ title: 'Section Created', description: `"${sectionName.trim()}" was added.` });
     }
   };
+  
+  const handleRenameSection = (deckId: string, sectionId: string) => {
+    const section = decks.find(d => d.id === deckId)?.sections.find(s => s.id === sectionId);
+    if (!section) return;
+
+    const newName = prompt('Enter new name for the section:', section.title);
+    if (newName && newName.trim() !== '') {
+        setDecks(prevDecks => prevDecks.map(deck => {
+            if (deck.id === deckId) {
+                const newSections = deck.sections.map(sec => {
+                    if (sec.id === sectionId) {
+                        return { ...sec, title: newName.trim() };
+                    }
+                    return sec;
+                });
+                return { ...deck, sections: newSections };
+            }
+            return deck;
+        }));
+        toast({ title: 'Section Renamed', description: `Section renamed to "${newName.trim()}".` });
+    }
+  };
 
   const handleNewSlide = (deckId: string, sectionId: string) => {
       setIsCreatingNewSlide(true);
@@ -506,7 +528,7 @@ export default function DivineDeckPresenter() {
                         })}
                         </div>
                     ) : (
-                        <Accordion type="single" collapsible className="w-full">
+                        <Accordion type="multiple" collapsible className="w-full">
                             {decks.map(deck => (
                             <AccordionItem value={deck.id} key={deck.id}>
                                 <AccordionTrigger>{deck.fileName}</AccordionTrigger>
@@ -516,13 +538,14 @@ export default function DivineDeckPresenter() {
                                             <Plus className="mr-2 h-4 w-4"/> Add New Section
                                         </Button>
                                     </div>
-                                    <Accordion type="single" collapsible className="w-full pl-4">
+                                    <Accordion type="multiple" collapsible className="w-full pl-4">
                                     {deck.sections.map(section => (
                                         <AccordionItem value={section.id} key={section.id}>
                                             <AccordionTrigger>{section.title}</AccordionTrigger>
                                             <AccordionContent>
                                                 <div className="px-1 py-2 flex flex-col gap-2">
                                                     <Button size="sm" variant="outline" className="w-full" onClick={() => handleAddSectionToQueue(section)}><Plus className="mr-2 h-4 w-4"/> Add All ({section.slides.length}) to Queue</Button>
+                                                    <Button size="sm" variant="outline" className="w-full" onClick={() => handleRenameSection(deck.id, section.id)}><Edit className="mr-2 h-4 w-4"/> Rename Section</Button>
                                                     <Button size="sm" variant="outline" className="w-full" onClick={() => handleNewSlide(deck.id, section.id)}><FilePlus className="mr-2 h-4 w-4"/> Add New Slide</Button>
                                                 </div>
                                                 {section.slides.map(slide => (
