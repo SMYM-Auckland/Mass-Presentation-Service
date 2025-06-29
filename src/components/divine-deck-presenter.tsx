@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   FilePlus,
   Tv,
@@ -323,14 +324,18 @@ export default function DivineDeckPresenter() {
   const handleBulkDelete = () => {
     const deletedCount = selectedSlides.size;
     if (deletedCount === 0) return;
-    const currentSlideQueueId = queue[currentIndex]?.queueId;
+    
+    const currentSlideInQueue = queue[currentIndex];
+    
     const newQueue = queue.filter(item => !selectedSlides.has(item.queueId));
-    if (currentSlideQueueId && !selectedSlides.has(currentSlideQueueId)) {
-        const newIndex = newQueue.findIndex(p => p.queueId === currentSlideQueueId);
+
+    if (currentSlideInQueue && !selectedSlides.has(currentSlideInQueue.queueId)) {
+        const newIndex = newQueue.findIndex(p => p.queueId === currentSlideInQueue.queueId);
         setCurrentIndex(newIndex);
-    } else {
+    } else if (currentSlideInQueue && selectedSlides.has(currentSlideInQueue.queueId)) {
         setCurrentIndex(prev => Math.min(prev, newQueue.length - 1));
     }
+
     setQueue(newQueue);
     setSelectedSlides(new Set());
     toast({ title: "Slides removed", description: `${deletedCount} slides removed from the queue.`});
@@ -438,123 +443,137 @@ export default function DivineDeckPresenter() {
         </header>
 
         <div className="flex flex-1 min-h-0">
-            <main className="flex-[3] flex flex-col p-4 gap-4">
-                <AnimatePresence mode="wait">
-                    <motion.div key={currentSlide?.id || 'empty'} initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-20}} transition={{duration: 0.3}} className="flex-1 flex flex-col relative">
-                       <SlideDisplay slide={currentSlide} className="h-full" />
-                       {currentSlide && <Button size="icon" variant="ghost" className="absolute top-4 right-4" onClick={() => handleEditSlide(currentSlide)}><Edit className="h-5 w-5"/></Button>}
-                    </motion.div>
-                </AnimatePresence>
-                <div className="grid grid-cols-2 gap-4 h-1/3">
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-bold font-headline text-lg">Next Slide</h3>
-                        <SlideDisplay slide={nextSlide} className="h-full" isNext />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h3 className="font-bold font-headline text-lg flex items-center gap-2"><Mic className="h-5 w-5"/> Speaker Notes</h3>
-                        <Card className="flex-1"><ScrollArea className="h-full"><CardContent className="p-4 text-sm">{currentSlide?.notes || <p className="text-muted-foreground">No notes for this slide.</p>}</CardContent></ScrollArea></Card>
-                    </div>
-                </div>
-                <div className="flex items-center justify-center p-2 border-t gap-4">
-                    <div className="flex items-center gap-2" onClick={() => setIsTimerRunning(!isTimerRunning)}>
-                        <Clock className="h-6 w-6 text-primary cursor-pointer"/>
-                        <span className="text-2xl font-mono font-semibold">{formatTime(timer)}</span>
-                    </div>
-                    <Separator orientation="vertical" className="h-8"/>
-                    <Button variant="outline" size="lg" onClick={handlePrev} disabled={currentIndex <= -1}><ChevronsLeft /></Button>
-                    <Button size="lg" onClick={handleNext} disabled={currentIndex >= queue.length - 1}><ChevronsRight/></Button>
-                </div>
-            </main>
+          <PanelGroup direction="horizontal">
+            <Panel defaultSize={70} minSize={30}>
+              <main className="h-full flex flex-col p-4 gap-4">
+                  <PanelGroup direction="vertical" className="flex-1 min-h-0">
+                    <Panel defaultSize={65} minSize={30}>
+                      <AnimatePresence mode="wait">
+                          <motion.div key={currentSlide?.id || 'empty'} initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-20}} transition={{duration: 0.3}} className="h-full flex flex-col relative">
+                            <SlideDisplay slide={currentSlide} className="h-full" />
+                            {currentSlide && <Button size="icon" variant="ghost" className="absolute top-4 right-4" onClick={() => handleEditSlide(currentSlide)}><Edit className="h-5 w-5"/></Button>}
+                          </motion.div>
+                      </AnimatePresence>
+                    </Panel>
+                    <PanelResizeHandle className="h-px bg-border my-2 data-[resize-handle-state=drag]:bg-primary data-[resize-handle-state=hover]:h-1 transition-all" />
+                    <Panel defaultSize={35} minSize={20}>
+                      <div className="grid grid-cols-2 gap-4 h-full">
+                          <div className="flex flex-col gap-2 h-full">
+                              <h3 className="font-bold font-headline text-lg shrink-0">Next Slide</h3>
+                              <SlideDisplay slide={nextSlide} className="h-full" isNext />
+                          </div>
+                          <div className="flex flex-col gap-2 h-full">
+                              <h3 className="font-bold font-headline text-lg flex items-center gap-2 shrink-0"><Mic className="h-5 w-5"/> Speaker Notes</h3>
+                              <Card className="flex-1 min-h-0"><ScrollArea className="h-full"><CardContent className="p-4 text-sm">{currentSlide?.notes || <p className="text-muted-foreground">No notes for this slide.</p>}</CardContent></ScrollArea></Card>
+                          </div>
+                      </div>
+                    </Panel>
+                  </PanelGroup>
 
-            <aside className="w-[420px] border-l flex flex-col">
-                <div className="p-4 border-b">
-                    <div className="flex justify-between items-center mb-2">
-                        <h2 className="text-xl font-bold font-headline">Live Queue</h2>
-                        {selectedSlides.size > 0 && (<Button variant="destructive" size="sm" onClick={handleBulkDelete}><Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedSlides.size})</Button>)}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <Checkbox id="select-all" onCheckedChange={(checked) => handleToggleSelectAll(Boolean(checked))} checked={queue.length > 0 && selectedSlides.size === queue.length} disabled={queue.length === 0} />
-                        <label htmlFor="select-all" className="text-sm font-medium leading-none text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{queue.length} items in queue.</label>
-                    </div>
-                </div>
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <ScrollArea className="flex-1">
-                        <SortableContext items={queue.map(i => i.queueId)} strategy={verticalListSortingStrategy}>
-                            <div className="p-2 flex flex-col gap-1">
-                                {queue.map((item, index) => (
-                                    <QueueItemCard key={item.queueId} item={item} index={index} isCurrent={currentIndex === index} isSelected={selectedSlides.has(item.queueId)} onSelect={() => setCurrentIndex(index)} onToggleSelection={handleToggleSelection} onMove={handleMoveInQueue} onRemove={handleRemoveFromQueue} queueLength={queue.length} />
-                                ))}
-                            </div>
-                        </SortableContext>
-                    </ScrollArea>
-                </DndContext>
-                <div className="p-4 border-t">
-                    <h2 className="text-xl font-bold font-headline mb-2">Library</h2>
-                    <div className="relative mb-2">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-                        <Input placeholder="Search all slides..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
-                    </div>
-                    <ScrollArea className="h-64">
-                    {searchTerm ? (
-                        <div className="flex flex-col gap-1 py-2">
-                        {searchResults.map((result, index) => {
-                          if (result.type === 'slide') {
-                            return (
-                              <Card key={`search-slide-${result.data.id}-${index}`} className="p-2 flex items-center gap-2">
-                                  <div className="flex-1"><p className="font-semibold truncate">{result.data.title}</p><p className="text-xs text-muted-foreground">{result.data.source}</p></div>
-                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAddToQueue(result.data)}><Plus className="h-4 w-4"/></Button>
-                              </Card>
-                            )
-                          } else {
-                            return (
-                              <Card key={`search-section-${result.data.id}-${index}`} className="p-2 flex items-center gap-2 bg-primary/10 border-primary/50">
-                                <div className="flex-1"><p className="font-semibold truncate">{result.data.title}</p><p className="text-xs text-muted-foreground">{result.source} &bull; {result.data.slides.length} slides</p></div>
-                                <Button variant="outline" size="sm" className="h-8" onClick={() => handleAddSectionToQueue(result.data)}><Plus className="h-4 w-4 mr-1.5"/> Add All</Button>
-                              </Card>
-                            )
-                          }
-                        })}
-                        </div>
-                    ) : (
-                        <Accordion type="multiple" className="w-full">
-                            {decks.map(deck => (
-                            <AccordionItem value={deck.id} key={deck.id}>
-                                <AccordionTrigger>{deck.fileName}</AccordionTrigger>
-                                <AccordionContent>
-                                    <div className="px-4 pb-2">
-                                        <Button size="sm" variant="outline" className="w-full" onClick={() => handleAddNewSection(deck.id)}>
-                                            <Plus className="mr-2 h-4 w-4"/> Add New Section
-                                        </Button>
-                                    </div>
-                                    <Accordion type="multiple" className="w-full pl-4">
-                                    {deck.sections.map(section => (
-                                        <AccordionItem value={section.id} key={section.id}>
-                                            <AccordionTrigger>{section.title}</AccordionTrigger>
-                                            <AccordionContent>
-                                                <div className="px-1 py-2 flex flex-col gap-2">
-                                                    <Button size="sm" variant="outline" className="w-full" onClick={() => handleAddSectionToQueue(section)}><Plus className="mr-2 h-4 w-4"/> Add All ({section.slides.length}) to Queue</Button>
-                                                    <Button size="sm" variant="outline" className="w-full" onClick={() => handleRenameSection(deck.id, section.id)}><Edit className="mr-2 h-4 w-4"/> Rename Section</Button>
-                                                    <Button size="sm" variant="outline" className="w-full" onClick={() => handleNewSlide(deck.id, section.id)}><FilePlus className="mr-2 h-4 w-4"/> Add New Slide</Button>
-                                                </div>
-                                                {section.slides.map(slide => (
-                                                <div key={slide.id} className="flex items-center gap-2 p-1 rounded hover:bg-muted">
-                                                    {slide.hidden && <EyeOff className="h-4 w-4 text-muted-foreground shrink-0"/>}
-                                                    <p className={`flex-1 truncate text-sm ${slide.hidden ? 'text-muted-foreground' : ''}`}>{slide.title}</p>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddToQueue(slide)}><Plus className="h-4 w-4"/></Button>
-                                                </div>
-                                                ))}
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                    ))}
-                                    </Accordion>
-                                </AccordionContent>
-                            </AccordionItem>
-                            ))}
-                        </Accordion>
-                    )}
-                    </ScrollArea>
-                </div>
-            </aside>
+                  <div className="flex items-center justify-center p-2 border-t gap-4 shrink-0">
+                      <div className="flex items-center gap-2" onClick={() => setIsTimerRunning(!isTimerRunning)}>
+                          <Clock className="h-6 w-6 text-primary cursor-pointer"/>
+                          <span className="text-2xl font-mono font-semibold">{formatTime(timer)}</span>
+                      </div>
+                      <Separator orientation="vertical" className="h-8"/>
+                      <Button variant="outline" size="lg" onClick={handlePrev} disabled={currentIndex <= -1}><ChevronsLeft /></Button>
+                      <Button size="lg" onClick={handleNext} disabled={currentIndex >= queue.length - 1}><ChevronsRight/></Button>
+                  </div>
+              </main>
+            </Panel>
+            <PanelResizeHandle className="w-px bg-border data-[resize-handle-state=drag]:bg-primary data-[resize-handle-state=hover]:w-1 transition-all" />
+            <Panel defaultSize={30} minSize={20}>
+              <aside className="h-full w-full flex flex-col">
+                  <div className="p-4 border-b">
+                      <div className="flex justify-between items-center mb-2">
+                          <h2 className="text-xl font-bold font-headline">Live Queue</h2>
+                          {selectedSlides.size > 0 && (<Button variant="destructive" size="sm" onClick={handleBulkDelete}><Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedSlides.size})</Button>)}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                          <Checkbox id="select-all" onCheckedChange={(checked) => handleToggleSelectAll(Boolean(checked))} checked={queue.length > 0 && selectedSlides.size === queue.length} disabled={queue.length === 0} />
+                          <label htmlFor="select-all" className="text-sm font-medium leading-none text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{queue.length} items in queue.</label>
+                      </div>
+                  </div>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                      <ScrollArea className="flex-1">
+                          <SortableContext items={queue.map(i => i.queueId)} strategy={verticalListSortingStrategy}>
+                              <div className="p-2 flex flex-col gap-1">
+                                  {queue.map((item, index) => (
+                                      <QueueItemCard key={item.queueId} item={item} index={index} isCurrent={currentIndex === index} isSelected={selectedSlides.has(item.queueId)} onSelect={() => setCurrentIndex(index)} onToggleSelection={handleToggleSelection} onMove={handleMoveInQueue} onRemove={handleRemoveFromQueue} queueLength={queue.length} />
+                                  ))}
+                              </div>
+                          </SortableContext>
+                      </ScrollArea>
+                  </DndContext>
+                  <div className="p-4 border-t">
+                      <h2 className="text-xl font-bold font-headline mb-2">Library</h2>
+                      <div className="relative mb-2">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                          <Input placeholder="Search all slides..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+                      </div>
+                      <ScrollArea className="h-64">
+                      {searchTerm ? (
+                          <div className="flex flex-col gap-1 py-2">
+                          {searchResults.map((result, index) => {
+                            if (result.type === 'slide') {
+                              return (
+                                <Card key={`search-slide-${result.data.id}-${index}`} className="p-2 flex items-center gap-2">
+                                    <div className="flex-1"><p className="font-semibold truncate">{result.data.title}</p><p className="text-xs text-muted-foreground">{result.data.source}</p></div>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAddToQueue(result.data)}><Plus className="h-4 w-4"/></Button>
+                                </Card>
+                              )
+                            } else {
+                              return (
+                                <Card key={`search-section-${result.data.id}-${index}`} className="p-2 flex items-center gap-2 bg-primary/10 border-primary/50">
+                                  <div className="flex-1"><p className="font-semibold truncate">{result.data.title}</p><p className="text-xs text-muted-foreground">{result.source} &bull; {result.data.slides.length} slides</p></div>
+                                  <Button variant="outline" size="sm" className="h-8" onClick={() => handleAddSectionToQueue(result.data)}><Plus className="h-4 w-4 mr-1.5"/> Add All</Button>
+                                </Card>
+                              )
+                            }
+                          })}
+                          </div>
+                      ) : (
+                          <Accordion type="multiple" className="w-full">
+                              {decks.map(deck => (
+                              <AccordionItem value={deck.id} key={deck.id}>
+                                  <AccordionTrigger>{deck.fileName}</AccordionTrigger>
+                                  <AccordionContent>
+                                      <div className="px-4 pb-2">
+                                          <Button size="sm" variant="outline" className="w-full" onClick={() => handleAddNewSection(deck.id)}>
+                                              <Plus className="mr-2 h-4 w-4"/> Add New Section
+                                          </Button>
+                                      </div>
+                                      <Accordion type="multiple" className="w-full pl-4">
+                                      {deck.sections.map(section => (
+                                          <AccordionItem value={section.id} key={section.id}>
+                                              <AccordionTrigger>{section.title}</AccordionTrigger>
+                                              <AccordionContent>
+                                                  <div className="px-1 py-2 flex flex-col gap-2">
+                                                      <Button size="sm" variant="outline" className="w-full" onClick={() => handleAddSectionToQueue(section)}><Plus className="mr-2 h-4 w-4"/> Add All ({section.slides.length}) to Queue</Button>
+                                                      <Button size="sm" variant="outline" className="w-full" onClick={() => handleRenameSection(deck.id, section.id)}><Edit className="mr-2 h-4 w-4"/> Rename Section</Button>
+                                                      <Button size="sm" variant="outline" className="w-full" onClick={() => handleNewSlide(deck.id, section.id)}><FilePlus className="mr-2 h-4 w-4"/> Add New Slide</Button>
+                                                  </div>
+                                                  {section.slides.map(slide => (
+                                                  <div key={slide.id} className="flex items-center gap-2 p-1 rounded hover:bg-muted">
+                                                      {slide.hidden && <EyeOff className="h-4 w-4 text-muted-foreground shrink-0"/>}
+                                                      <p className={`flex-1 truncate text-sm ${slide.hidden ? 'text-muted-foreground' : ''}`}>{slide.title}</p>
+                                                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleAddToQueue(slide)}><Plus className="h-4 w-4"/></Button>
+                                                  </div>
+                                                  ))}
+                                              </AccordionContent>
+                                          </AccordionItem>
+                                      ))}
+                                      </Accordion>
+                                  </AccordionContent>
+                              </AccordionItem>
+                              ))}
+                          </Accordion>
+                      )}
+                      </ScrollArea>
+                  </div>
+              </aside>
+            </Panel>
+          </PanelGroup>
         </div>
 
         {editingSlide && (
