@@ -171,8 +171,30 @@ export default function DivineDeckPresenter() {
     }
   };
 
-  const handleNext = () => setCurrentIndex(prev => Math.min(prev + 1, queue.length - 1));
-  const handlePrev = () => setCurrentIndex(prev => Math.max(prev - 1, -1));
+  const handleNext = useCallback(() => setCurrentIndex(prev => Math.min(prev + 1, queue.length - 1)), [queue.length]);
+  const handlePrev = useCallback(() => setCurrentIndex(prev => Math.max(prev - 1, -1)), []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      // Do not trigger if user is typing in an input/textarea
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        return;
+      }
+
+      if (e.key === 'ArrowRight') {
+        handleNext();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrev();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleNext, handlePrev]);
 
   const handleSaveSetup = () => {
     const name = prompt("Enter a name for this setup:", `Mass ${new Date().toLocaleDateString()}`);
