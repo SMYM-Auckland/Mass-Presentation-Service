@@ -1,8 +1,10 @@
-# This file is used to build the development container.
-# For more information, see: https://containers.dev/guide/dockerfile
-FROM mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm
+# This Dockerfile sets up the development environment for your Next.js application.
+# It uses a Node.js 20 base image and sets the working directory.
+# Dependencies are installed via the 'postCreateCommand' in devcontainer.json.
+FROM node:20-bullseye
 
-# You can add custom OS packages here, if needed.
-# For example:
-# RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-#     && apt-get -y install --no-install-recommends <your-package-list-here>
+# Set the working directory in the container
+WORKDIR /usr/src/app
+
+# Keep the container running to allow for attaching and interactive development
+CMD ["sleep", "infinity"]

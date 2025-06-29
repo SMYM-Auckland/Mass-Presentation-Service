@@ -1,7 +1,7 @@
 {
 	"name": "Next.js Dev Container",
 	"build": {
-		"dockerfile": "Dockerfile",
+		"dockerfile": ".devcontainer/Dockerfile",
 		"context": ".."
 	},
 	"forwardPorts": [9002, 9100],
