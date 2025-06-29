@@ -528,7 +528,7 @@ export default function DivineDeckPresenter() {
                         })}
                         </div>
                     ) : (
-                        <Accordion type="multiple" collapsible className="w-full">
+                        <Accordion type="multiple" className="w-full">
                             {decks.map(deck => (
                             <AccordionItem value={deck.id} key={deck.id}>
                                 <AccordionTrigger>{deck.fileName}</AccordionTrigger>
@@ -538,7 +538,7 @@ export default function DivineDeckPresenter() {
                                             <Plus className="mr-2 h-4 w-4"/> Add New Section
                                         </Button>
                                     </div>
-                                    <Accordion type="multiple" collapsible className="w-full pl-4">
+                                    <Accordion type="multiple" className="w-full pl-4">
                                     {deck.sections.map(section => (
                                         <AccordionItem value={section.id} key={section.id}>
                                             <AccordionTrigger>{section.title}</AccordionTrigger>
