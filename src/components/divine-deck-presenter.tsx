@@ -24,13 +24,15 @@ import { Logo } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { Deck, Slide, MassSetup, Section } from '@/lib/types';
+import type { Deck, Slide, MassSetup, Section, LayoutType } from '@/lib/types';
 import { mockDecks, mockVerses } from '@/lib/mock-data';
 
 export default function DivineDeckPresenter() {
@@ -70,7 +72,7 @@ export default function DivineDeckPresenter() {
     return () => {
       channel.close();
     };
-  }, []);
+  }, [currentIndex, queue]);
   
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -100,7 +102,7 @@ export default function DivineDeckPresenter() {
     if (!searchTerm) return [];
     return allSlides.filter(slide =>
       slide.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      slide.content.toLowerCase().includes(searchTerm.toLowerCase())
+      slide.contents.join(' ').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [searchTerm, allSlides]);
 
@@ -164,16 +166,21 @@ export default function DivineDeckPresenter() {
   };
 
   const handleEditSlide = (slide: Slide) => {
-    setEditingSlide(slide);
+    const slideToEdit = {
+        ...slide,
+        contents: Array.isArray(slide.contents) && slide.contents.length > 0 ? slide.contents : [''],
+        layoutType: slide.layoutType || '1-col',
+    };
+    setEditingSlide(slideToEdit);
     setIsEditorOpen(true);
   };
   
-  const handleUpdateSlide = (updatedSlide: Slide) => {
+  const handleUpdateSlide = (updatedSlide: Slide | null) => {
+    if (!updatedSlide) return;
+
     const updateInArray = (arr: Slide[]) => arr.map(s => s.id === updatedSlide.id ? updatedSlide : s);
     setQueue(updateInArray);
     
-    // This is a deep update, which is complex. For mock data, we can fake it.
-    // In a real app, this would be an API call.
     const newDecks = decks.map(deck => ({
         ...deck,
         sections: deck.sections.map(section => ({
@@ -188,24 +195,62 @@ export default function DivineDeckPresenter() {
     toast({ title: "Slide Updated", description: `Changes to "${updatedSlide.title}" have been saved.`});
   };
 
-  const SlideDisplay = ({ slide, className, isNext }: { slide: Slide | null, className?: string, isNext?: boolean }) => (
-    <Card className={`flex flex-col overflow-hidden transition-all duration-300 ${className}`}>
-        <CardHeader>
-            <CardTitle className={`font-headline ${isNext ? 'text-2xl' : 'text-4xl'}`}>{slide?.title || (isNext ? 'End of Queue' : 'Select a Slide')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col items-center justify-center text-center gap-4">
-            {slide ? (
-                <>
-                  <p className={`whitespace-pre-wrap ${isNext ? 'text-lg' : 'text-3xl'}`}>
-                      {slide.content}
-                  </p>
-                  {slide.additionalContent1 && <p className={`whitespace-pre-wrap ${isNext ? 'text-base' : 'text-xl'} text-muted-foreground`}>{slide.additionalContent1}</p>}
-                  {slide.additionalContent2 && <p className={`whitespace-pre-wrap ${isNext ? 'text-base' : 'text-xl'} text-muted-foreground`}>{slide.additionalContent2}</p>}
-                </>
-            ) : <div className="text-muted-foreground"></div>}
-        </CardContent>
-    </Card>
-  );
+  const handleLayoutChange = (newLayout: LayoutType) => {
+    if (!editingSlide) return;
+
+    const numSections = { '1-col': 1, '2-col': 2, '3-col': 3, '4-quad': 4 }[newLayout];
+    const currentContents = editingSlide.contents || [''];
+    const newContents = Array.from({ length: numSections }, (_, i) => currentContents[i] || '');
+
+    setEditingSlide({
+        ...editingSlide,
+        layoutType: newLayout,
+        contents: newContents,
+    });
+  };
+
+  const SlideDisplay = ({ slide, className, isNext }: { slide: Slide | null, className?: string, isNext?: boolean }) => {
+    const getLayoutClass = (layoutType: LayoutType | undefined) => {
+        if (!layoutType) return 'flex flex-col items-center justify-center text-center gap-4';
+        switch (layoutType) {
+            case '2-col': return 'grid grid-cols-2 gap-4 h-full';
+            case '3-col': return 'grid grid-cols-3 gap-4 h-full';
+            case '4-quad': return 'grid grid-cols-2 grid-rows-2 gap-4 h-full';
+            default: return 'flex flex-col items-center justify-center text-center gap-4';
+        }
+    };
+
+    const getParagraphClass = (layoutType: LayoutType | undefined, isNext?: boolean) => {
+        // isNext adjusts size for the "Next Slide" preview
+        switch (layoutType) {
+            case '2-col': return isNext ? 'text-base' : 'text-2xl';
+            case '3-col': return isNext ? 'text-sm' : 'text-xl';
+            case '4-quad': return isNext ? 'text-sm' : 'text-xl';
+            default: return isNext ? 'text-lg' : 'text-3xl';
+        }
+    };
+    
+    return (
+        <Card className={`flex flex-col overflow-hidden transition-all duration-300 ${className}`}>
+            <CardHeader className="shrink-0">
+                <CardTitle className={`font-headline ${isNext ? 'text-2xl' : 'text-4xl'}`}>{slide?.title || (isNext ? 'End of Queue' : 'Select a Slide')}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 p-4">
+                {slide ? (
+                    <div className={`w-full h-full ${getLayoutClass(slide.layoutType)}`}>
+                        {slide.contents?.map((content, index) => (
+                            <div key={index} className="flex items-center justify-center p-2 rounded-lg bg-muted/20 overflow-auto">
+                                <p className={`whitespace-pre-wrap text-center ${getParagraphClass(slide.layoutType, isNext)}`}>
+                                    {content}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                ) : <div className="text-muted-foreground"></div>}
+            </CardContent>
+        </Card>
+    );
+  };
 
   return (
     <div className="h-screen w-screen flex flex-col bg-background font-body">
@@ -363,17 +408,60 @@ export default function DivineDeckPresenter() {
 
         {editingSlide && (
             <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="sm:max-w-3xl">
                     <DialogHeader>
                         <DialogTitle>Edit Slide</DialogTitle>
-                        <CardDescription>Make live changes to the slide content and notes.</CardDescription>
+                        <CardDescription>Make live changes to the slide content, layout, and notes.</CardDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <Input defaultValue={editingSlide.title} onChange={e => setEditingSlide(s => s ? {...s, title: e.target.value} : null)} />
-                        <Textarea placeholder="Slide content..." className="min-h-40" defaultValue={editingSlide.content} onChange={e => setEditingSlide(s => s ? {...s, content: e.target.value} : null)}/>
-                        <Textarea placeholder="Speaker notes..." defaultValue={editingSlide.notes} onChange={e => setEditingSlide(s => s ? {...s, notes: e.target.value} : null)}/>
-                        <Textarea placeholder="Additional Content Section 1" defaultValue={editingSlide.additionalContent1} onChange={e => setEditingSlide(s => s ? {...s, additionalContent1: e.target.value} : null)}/>
-                        <Textarea placeholder="Additional Content Section 2" defaultValue={editingSlide.additionalContent2} onChange={e => setEditingSlide(s => s ? {...s, additionalContent2: e.target.value} : null)}/>
+                        <div className="grid gap-2">
+                            <Label htmlFor="slide-title">Title</Label>
+                            <Input id="slide-title" value={editingSlide.title} onChange={e => setEditingSlide(s => s ? {...s, title: e.target.value} : null)} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="layout-select">Layout</Label>
+                            <Select
+                                value={editingSlide.layoutType}
+                                onValueChange={(value: LayoutType) => handleLayoutChange(value)}
+                            >
+                                <SelectTrigger id="layout-select" className="w-[180px]">
+                                    <SelectValue placeholder="Select a layout" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="1-col">1 Column</SelectItem>
+                                    <SelectItem value="2-col">2 Columns</SelectItem>
+                                    <SelectItem value="3-col">3 Columns</SelectItem>
+                                    <SelectItem value="4-quad">4 Quadrants</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Separator/>
+                        
+                        <Label>Content Sections</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {editingSlide.contents.map((content, index) => (
+                                <Textarea
+                                    key={index}
+                                    placeholder={`Section ${index + 1} content...`}
+                                    className="min-h-32"
+                                    value={content}
+                                    onChange={e => {
+                                        if (!editingSlide) return;
+                                        const newContents = [...editingSlide.contents];
+                                        newContents[index] = e.target.value;
+                                        setEditingSlide({ ...editingSlide, contents: newContents });
+                                    }}
+                                />
+                            ))}
+                        </div>
+                        
+                        <Separator/>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="slide-notes">Speaker Notes</Label>
+                            <Textarea id="slide-notes" placeholder="Speaker notes..." value={editingSlide.notes || ''} onChange={e => setEditingSlide(s => s ? {...s, notes: e.target.value} : null)}/>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditorOpen(false)}>Cancel</Button>

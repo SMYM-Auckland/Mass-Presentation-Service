@@ -1,14 +1,15 @@
+export type LayoutType = '1-col' | '2-col' | '3-col' | '4-quad';
+
 export interface Slide {
   id: string;
   title: string;
-  content: string;
+  contents: string[];
+  layoutType: LayoutType;
   notes?: string;
   hidden?: boolean;
   type: 'slide' | 'verse';
   source: string;
   dataAiHint?: string;
-  additionalContent1?: string;
-  additionalContent2?: string;
 }
 
 export interface Section {
