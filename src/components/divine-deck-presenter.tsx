@@ -93,18 +93,52 @@ export default function DivineDeckPresenter() {
     }
   }, [currentSlide]);
 
-  const allSlides = useMemo(() => {
-    const slidesFromDecks = decks.flatMap(deck => deck.sections.flatMap(section => section.slides));
-    return [...slidesFromDecks, ...mockVerses];
-  }, [decks]);
-
   const searchResults = useMemo(() => {
     if (!searchTerm) return [];
-    return allSlides.filter(slide =>
-      slide.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      slide.contents.join(' ').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm, allSlides]);
+    
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    
+    const results: (
+      { type: 'section'; data: Section; source: string; } |
+      { type: 'slide'; data: Slide; }
+    )[] = [];
+
+    const addedItems = new Set<string>(); // To avoid duplicates
+
+    decks.forEach(deck => {
+      deck.sections.forEach(section => {
+        // Match section title
+        if (section.title.toLowerCase().includes(lowerCaseSearchTerm)) {
+          if (!addedItems.has(`section-${section.id}`)) {
+            results.push({ type: 'section', data: section, source: deck.fileName });
+            addedItems.add(`section-${section.id}`);
+          }
+        }
+        
+        // Match slides within section
+        section.slides.forEach(slide => {
+          if (slide.title.toLowerCase().includes(lowerCaseSearchTerm) || slide.contents.join(' ').toLowerCase().includes(lowerCaseSearchTerm)) {
+            if (!addedItems.has(`slide-${slide.id}`)) {
+              results.push({ type: 'slide', data: slide });
+              addedItems.add(`slide-${slide.id}`);
+            }
+          }
+        });
+      });
+    });
+
+    // Match verses
+    mockVerses.forEach(verse => {
+      if (verse.title.toLowerCase().includes(lowerCaseSearchTerm) || (verse.contents && verse.contents.join(' ').toLowerCase().includes(lowerCaseSearchTerm))) {
+         if (!addedItems.has(`slide-${verse.id}`)) {
+            results.push({ type: 'slide', data: verse });
+            addedItems.add(`slide-${verse.id}`);
+         }
+      }
+    });
+
+    return results;
+  }, [searchTerm, decks]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
@@ -122,6 +156,11 @@ export default function DivineDeckPresenter() {
   const handleAddToQueue = (slide: Slide) => {
     setQueue(prev => [...prev, slide]);
     toast({ title: `Added "${slide.title}" to queue.` });
+  };
+
+  const handleAddSectionToQueue = (section: Section) => {
+    setQueue(prev => [...prev, ...section.slides]);
+    toast({ title: `Added all ${section.slides.length} slides from "${section.title}".` });
   };
 
   const handleRemoveFromQueue = (index: number) => {
@@ -364,15 +403,31 @@ export default function DivineDeckPresenter() {
                     <ScrollArea className="h-64">
                     {searchTerm ? (
                         <div className="flex flex-col gap-1 py-2">
-                        {searchResults.map(slide => (
-                            <Card key={slide.id} className="p-2 flex items-center gap-2">
+                        {searchResults.map((result, index) => {
+                          if (result.type === 'slide') {
+                            return (
+                              <Card key={`search-slide-${result.data.id}-${index}`} className="p-2 flex items-center gap-2">
+                                  <div className="flex-1">
+                                      <p className="font-semibold truncate">{result.data.title}</p>
+                                      <p className="text-xs text-muted-foreground">{result.data.source}</p>
+                                  </div>
+                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAddToQueue(result.data)}><Plus className="h-4 w-4"/></Button>
+                              </Card>
+                            )
+                          } else { // result.type === 'section'
+                            return (
+                              <Card key={`search-section-${result.data.id}-${index}`} className="p-2 flex items-center gap-2 bg-primary/10 border-primary/50">
                                 <div className="flex-1">
-                                    <p className="font-semibold truncate">{slide.title}</p>
-                                    <p className="text-xs text-muted-foreground">{slide.source}</p>
+                                    <p className="font-semibold truncate">{result.data.title}</p>
+                                    <p className="text-xs text-muted-foreground">{result.source} &bull; {result.data.slides.length} slides</p>
                                 </div>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAddToQueue(slide)}><Plus className="h-4 w-4"/></Button>
-                            </Card>
-                        ))}
+                                <Button variant="outline" size="sm" className="h-8" onClick={() => handleAddSectionToQueue(result.data)}>
+                                    <Plus className="h-4 w-4 mr-1.5"/> Add All
+                                </Button>
+                              </Card>
+                            )
+                          }
+                        })}
                         </div>
                     ) : (
                         <Accordion type="single" collapsible className="w-full">
