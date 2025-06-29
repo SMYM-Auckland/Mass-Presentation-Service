@@ -516,9 +516,9 @@ export default function DivineDeckPresenter() {
                                             <Plus className="mr-2 h-4 w-4"/> Add New Section
                                         </Button>
                                     </div>
+                                    <Accordion type="single" collapsible className="w-full pl-4">
                                     {deck.sections.map(section => (
-                                    <Accordion type="single" collapsible className="w-full pl-4" key={section.id}>
-                                        <AccordionItem value={section.id}>
+                                        <AccordionItem value={section.id} key={section.id}>
                                             <AccordionTrigger>{section.title}</AccordionTrigger>
                                             <AccordionContent>
                                                 <div className="px-1 py-2 flex flex-col gap-2">
@@ -534,8 +534,8 @@ export default function DivineDeckPresenter() {
                                                 ))}
                                             </AccordionContent>
                                         </AccordionItem>
-                                    </Accordion>
                                     ))}
+                                    </Accordion>
                                 </AccordionContent>
                             </AccordionItem>
                             ))}
