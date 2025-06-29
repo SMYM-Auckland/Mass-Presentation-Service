@@ -1,0 +1,35 @@
+{
+	"name": "Next.js Dev Container",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".."
+	},
+	"forwardPorts": [9002, 9100],
+	"portsAttributes": {
+		"9002": {
+			"label": "Next.js App",
+			"onAutoForward": "openBrowser"
+		},
+		"9100": {
+			"label": "Genkit Dev UI",
+			"onAutoForward": "openPreview"
+		}
+	},
+	"postCreateCommand": "npm install",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode",
+				"bradlc.vscode-tailwindcss",
+				"yoavbls.pretty-ts-errors",
+                "genkit.genkit-tools",
+                "github.copilot"
+			],
+            "settings": {
+                "IDX.aI.enableInlineCompletion": true,
+                "IDX.aI.enableCodebaseIndexing": true
+            }
+		}
+	}
+}
