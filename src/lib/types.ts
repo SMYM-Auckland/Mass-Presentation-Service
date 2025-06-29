@@ -7,6 +7,8 @@ export interface Slide {
   type: 'slide' | 'verse';
   source: string;
   dataAiHint?: string;
+  additionalContent1?: string;
+  additionalContent2?: string;
 }
 
 export interface Section {

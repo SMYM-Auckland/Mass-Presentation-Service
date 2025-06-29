@@ -46,10 +46,20 @@ export default function ProjectorPage() {
                   {currentSlide.title}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex-1 flex items-center justify-center text-center">
+              <CardContent className="flex-1 flex flex-col items-center justify-center text-center gap-8">
                 <p className="text-4xl lg:text-6xl whitespace-pre-wrap leading-tight">
                   {currentSlide.content}
                 </p>
+                {currentSlide.additionalContent1 && (
+                  <p className="text-3xl lg:text-5xl whitespace-pre-wrap leading-tight text-gray-400">
+                    {currentSlide.additionalContent1}
+                  </p>
+                )}
+                {currentSlide.additionalContent2 && (
+                  <p className="text-3xl lg:text-5xl whitespace-pre-wrap leading-tight text-gray-400">
+                    {currentSlide.additionalContent2}
+                  </p>
+                )}
               </CardContent>
             </Card>
           </motion.div>

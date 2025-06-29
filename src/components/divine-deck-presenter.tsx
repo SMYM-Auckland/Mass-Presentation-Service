@@ -193,11 +193,15 @@ export default function DivineDeckPresenter() {
         <CardHeader>
             <CardTitle className={`font-headline ${isNext ? 'text-2xl' : 'text-4xl'}`}>{slide?.title || (isNext ? 'End of Queue' : 'Select a Slide')}</CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex items-center justify-center text-center">
+        <CardContent className="flex-1 flex flex-col items-center justify-center text-center gap-4">
             {slide ? (
-                <p className={`whitespace-pre-wrap ${isNext ? 'text-lg' : 'text-3xl'}`}>
-                    {slide.content}
-                </p>
+                <>
+                  <p className={`whitespace-pre-wrap ${isNext ? 'text-lg' : 'text-3xl'}`}>
+                      {slide.content}
+                  </p>
+                  {slide.additionalContent1 && <p className={`whitespace-pre-wrap ${isNext ? 'text-base' : 'text-xl'} text-muted-foreground`}>{slide.additionalContent1}</p>}
+                  {slide.additionalContent2 && <p className={`whitespace-pre-wrap ${isNext ? 'text-base' : 'text-xl'} text-muted-foreground`}>{slide.additionalContent2}</p>}
+                </>
             ) : <div className="text-muted-foreground"></div>}
         </CardContent>
     </Card>
@@ -368,6 +372,8 @@ export default function DivineDeckPresenter() {
                         <Input defaultValue={editingSlide.title} onChange={e => setEditingSlide(s => s ? {...s, title: e.target.value} : null)} />
                         <Textarea placeholder="Slide content..." className="min-h-40" defaultValue={editingSlide.content} onChange={e => setEditingSlide(s => s ? {...s, content: e.target.value} : null)}/>
                         <Textarea placeholder="Speaker notes..." defaultValue={editingSlide.notes} onChange={e => setEditingSlide(s => s ? {...s, notes: e.target.value} : null)}/>
+                        <Textarea placeholder="Additional Content Section 1" defaultValue={editingSlide.additionalContent1} onChange={e => setEditingSlide(s => s ? {...s, additionalContent1: e.target.value} : null)}/>
+                        <Textarea placeholder="Additional Content Section 2" defaultValue={editingSlide.additionalContent2} onChange={e => setEditingSlide(s => s ? {...s, additionalContent2: e.target.value} : null)}/>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditorOpen(false)}>Cancel</Button>
