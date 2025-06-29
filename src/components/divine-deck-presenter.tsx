@@ -178,7 +178,20 @@ export default function DivineDeckPresenter() {
   };
 
   const handleRemoveFromQueue = (queueId: string) => {
-    setQueue(prev => prev.filter(item => item.queueId !== queueId));
+    const currentSlideQueueId = queue[currentIndex]?.queueId;
+    const newQueue = queue.filter(p => p.queueId !== queueId);
+    
+    if (currentSlideQueueId && currentSlideQueueId !== queueId) {
+        const newIndex = newQueue.findIndex(p => p.queueId === currentSlideQueueId);
+        setCurrentIndex(newIndex);
+    } else {
+        // Current slide was deleted or no slide was active.
+        // Clamp the index to stay within the new array's bounds.
+        // This keeps the position stable, unless the last item was removed.
+        setCurrentIndex(prev => Math.min(prev, newQueue.length - 1));
+    }
+
+    setQueue(newQueue);
   };
   
   const handleMoveInQueue = (index: number, direction: 'up' | 'down') => {
@@ -284,7 +297,21 @@ export default function DivineDeckPresenter() {
 
   const handleBulkDelete = () => {
     const deletedCount = selectedSlides.size;
-    setQueue(prev => prev.filter(item => !selectedSlides.has(item.queueId)));
+    if (deletedCount === 0) return;
+
+    const currentSlideQueueId = queue[currentIndex]?.queueId;
+    const newQueue = queue.filter(item => !selectedSlides.has(item.queueId));
+
+    if (currentSlideQueueId && !selectedSlides.has(currentSlideQueueId)) {
+        const newIndex = newQueue.findIndex(p => p.queueId === currentSlideQueueId);
+        setCurrentIndex(newIndex);
+    } else {
+        // Current slide was deleted or no slide was active.
+        // Clamp the index to stay within the new array's bounds.
+        setCurrentIndex(prev => Math.min(prev, newQueue.length - 1));
+    }
+
+    setQueue(newQueue);
     setSelectedSlides(new Set());
     toast({ title: "Slides removed", description: `${deletedCount} slides removed from the queue.`});
   };
