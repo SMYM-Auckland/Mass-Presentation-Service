@@ -1,10 +1,12 @@
-# This Dockerfile sets up the development environment for your Next.js application.
-# It uses a Node.js 20 base image and sets the working directory.
-# Dependencies are installed via the 'postCreateCommand' in devcontainer.json.
-FROM node:20-bullseye
+# Use the official Node.js 20 image as a base.
+# 'bookworm-slim' is a smaller image variant that's good for development.
+FROM node:20-bookworm-slim
 
-# Set the working directory in the container
-WORKDIR /usr/src/app
+# The devcontainer.json configuration will handle the rest:
+# 1. Mount your local project files into the container.
+# 2. Run `npm install` automatically via the "postCreateCommand".
+#
+# This keeps the Dockerfile simple and focused on the base environment.
 
-# Keep the container running to allow for attaching and interactive development
+# This command just keeps the container running indefinitely.
 CMD ["sleep", "infinity"]
