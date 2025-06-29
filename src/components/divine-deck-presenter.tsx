@@ -18,8 +18,13 @@ import {
   Edit,
   EyeOff,
   BookOpen,
+  GripVertical,
+  Trash2,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Logo } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -34,11 +39,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import type { Deck, Slide, MassSetup, Section, LayoutType } from '@/lib/types';
 import { mockDecks, mockVerses } from '@/lib/mock-data';
+import { Checkbox } from '@/components/ui/checkbox';
+
+type QueueItem = Slide & { queueId: string };
 
 export default function DivineDeckPresenter() {
   const { toast } = useToast();
   const [decks, setDecks] = useState<Deck[]>([]);
-  const [queue, setQueue] = useState<Slide[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [searchTerm, setSearchTerm] = useState('');
   const [timer, setTimer] = useState(0);
@@ -46,6 +54,7 @@ export default function DivineDeckPresenter() {
   const [setups, setSetups] = useState<MassSetup[]>([]);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingSlide, setEditingSlide] = useState<Slide | null>(null);
+  const [selectedSlides, setSelectedSlides] = useState<Set<string>>(new Set());
 
   const channelRef = useRef<BroadcastChannel>();
   const projectorWindowRef = useRef<Window | null>(null);
@@ -154,17 +163,22 @@ export default function DivineDeckPresenter() {
   };
   
   const handleAddToQueue = (slide: Slide) => {
-    setQueue(prev => [...prev, slide]);
+    const queueItem: QueueItem = { ...slide, queueId: `q-${Date.now()}-${Math.random()}` };
+    setQueue(prev => [...prev, queueItem]);
     toast({ title: `Added "${slide.title}" to queue.` });
   };
 
   const handleAddSectionToQueue = (section: Section) => {
-    setQueue(prev => [...prev, ...section.slides]);
+    const newItems: QueueItem[] = section.slides.map(slide => ({
+      ...slide,
+      queueId: `q-${Date.now()}-${Math.random()}-${slide.id}`
+    }));
+    setQueue(prev => [...prev, ...newItems]);
     toast({ title: `Added all ${section.slides.length} slides from "${section.title}".` });
   };
 
-  const handleRemoveFromQueue = (index: number) => {
-    setQueue(prev => prev.filter((_, i) => i !== index));
+  const handleRemoveFromQueue = (queueId: string) => {
+    setQueue(prev => prev.filter(item => item.queueId !== queueId));
   };
   
   const handleMoveInQueue = (index: number, direction: 'up' | 'down') => {
@@ -217,7 +231,7 @@ export default function DivineDeckPresenter() {
   const handleUpdateSlide = (updatedSlide: Slide | null) => {
     if (!updatedSlide) return;
 
-    const updateInArray = (arr: Slide[]) => arr.map(s => s.id === updatedSlide.id ? updatedSlide : s);
+    const updateInArray = (arr: QueueItem[]) => arr.map(s => s.id === updatedSlide.id ? { ...s, ...updatedSlide } : s);
     setQueue(updateInArray);
     
     const newDecks = decks.map(deck => ({
@@ -246,6 +260,51 @@ export default function DivineDeckPresenter() {
         layoutType: newLayout,
         contents: newContents,
     });
+  };
+
+  const handleToggleSelection = (queueId: string, checked: boolean) => {
+    setSelectedSlides(prev => {
+        const newSet = new Set(prev);
+        if (checked) {
+            newSet.add(queueId);
+        } else {
+            newSet.delete(queueId);
+        }
+        return newSet;
+    });
+  };
+
+  const handleToggleSelectAll = (checked: boolean) => {
+      if (checked) {
+          setSelectedSlides(new Set(queue.map(item => item.queueId)));
+      } else {
+          setSelectedSlides(new Set());
+      }
+  };
+
+  const handleBulkDelete = () => {
+    const deletedCount = selectedSlides.size;
+    setQueue(prev => prev.filter(item => !selectedSlides.has(item.queueId)));
+    setSelectedSlides(new Set());
+    toast({ title: "Slides removed", description: `${deletedCount} slides removed from the queue.`});
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const {active, over} = event;
+    if (over && active.id !== over.id) {
+      setQueue((items) => {
+        const oldIndex = items.findIndex(item => item.queueId === active.id);
+        const newIndex = items.findIndex(item => item.queueId === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
   };
 
   const SlideDisplay = ({ slide, className, isNext }: { slide: Slide | null, className?: string, isNext?: boolean }) => {
@@ -373,27 +432,55 @@ export default function DivineDeckPresenter() {
             {/* Sidebar */}
             <aside className="w-[420px] border-l flex flex-col">
                 <div className="p-4 border-b">
-                    <h2 className="text-xl font-bold font-headline mb-2">Live Queue</h2>
-                    <p className="text-sm text-muted-foreground">{queue.length} items in queue.</p>
-                </div>
-                <ScrollArea className="flex-1">
-                    <div className="p-2 flex flex-col gap-1">
-                    {queue.map((slide, index) => (
-                        <Card key={`${slide.id}-${index}`} className={`p-2 flex items-center gap-2 transition-all ${currentIndex === index ? 'bg-primary/10 border-primary' : ''}`}>
-                            <span className="font-mono text-xs text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
-                            <div className="flex-1" onClick={() => setCurrentIndex(index)}>
-                                <p className="font-semibold truncate">{slide.title}</p>
-                                <p className="text-xs text-muted-foreground">{slide.source}</p>
-                            </div>
-                            <div className="flex flex-col">
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveInQueue(index, 'up')} disabled={index===0}><ChevronUp className="h-4 w-4"/></Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveInQueue(index, 'down')} disabled={index===queue.length-1}><ChevronDown className="h-4 w-4"/></Button>
-                            </div>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveFromQueue(index)}><X className="h-4 w-4"/></Button>
-                        </Card>
-                    ))}
+                    <div className="flex justify-between items-center mb-2">
+                        <h2 className="text-xl font-bold font-headline">Live Queue</h2>
+                        {selectedSlides.size > 0 && (
+                            <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete ({selectedSlides.size})
+                            </Button>
+                        )}
                     </div>
-                </ScrollArea>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="select-all"
+                            onCheckedChange={(checked) => handleToggleSelectAll(Boolean(checked))}
+                            checked={queue.length > 0 && selectedSlides.size === queue.length}
+                            disabled={queue.length === 0}
+                        />
+                        <label htmlFor="select-all" className="text-sm font-medium leading-none text-muted-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                           {queue.length} items in queue.
+                        </label>
+                    </div>
+                </div>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <ScrollArea className="flex-1">
+                        <SortableContext
+                            items={queue.map(i => i.queueId)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <div className="p-2 flex flex-col gap-1">
+                                {queue.map((item, index) => (
+                                    <QueueItemCard
+                                        key={item.queueId}
+                                        item={item}
+                                        index={index}
+                                        isCurrent={currentIndex === index}
+                                        isSelected={selectedSlides.has(item.queueId)}
+                                        onSelect={() => setCurrentIndex(index)}
+                                        onToggleSelection={handleToggleSelection}
+                                        onMove={handleMoveInQueue}
+                                        onRemove={handleRemoveFromQueue}
+                                        queueLength={queue.length}
+                                    />
+                                ))}
+                            </div>
+                        </SortableContext>
+                    </ScrollArea>
+                </DndContext>
                 <div className="p-4 border-t">
                     <h2 className="text-xl font-bold font-headline mb-2">Library</h2>
                     <div className="relative mb-2">
@@ -537,6 +624,48 @@ export default function DivineDeckPresenter() {
         )}
     </div>
   );
+}
+
+function QueueItemCard({ item, index, isCurrent, isSelected, onSelect, onToggleSelection, onMove, onRemove, queueLength }: {
+    item: QueueItem;
+    index: number;
+    isCurrent: boolean;
+    isSelected: boolean;
+    onSelect: () => void;
+    onToggleSelection: (id: string, checked: boolean) => void;
+    onMove: (index: number, direction: 'up' | 'down') => void;
+    onRemove: (id: string) => void;
+    queueLength: number;
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.queueId });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style}>
+            <Card className={`p-2 flex items-center gap-2 transition-all ${isCurrent ? 'bg-primary/10 border-primary' : ''}`}>
+                <div {...attributes} {...listeners} className="cursor-grab touch-none p-1">
+                    <GripVertical className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={(checked) => onToggleSelection(item.queueId, Boolean(checked))}
+                />
+                <div className="flex-1 cursor-pointer" onClick={onSelect}>
+                    <p className="font-semibold truncate">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">{item.source}</p>
+                </div>
+                <div className="flex flex-col">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onMove(index, 'up')} disabled={index === 0}><ChevronUp className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onMove(index, 'down')} disabled={index === queueLength - 1}><ChevronDown className="h-4 w-4" /></Button>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onRemove(item.queueId)}><X className="h-4 w-4" /></Button>
+            </Card>
+        </div>
+    );
 }
 
 // Minimal Framer Motion for smooth transitions
