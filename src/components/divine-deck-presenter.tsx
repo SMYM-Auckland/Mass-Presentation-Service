@@ -17,7 +17,6 @@ import {
   ChevronsLeft,
   Edit,
   EyeOff,
-  BookOpen,
   GripVertical,
   Trash2,
 } from 'lucide-react';
@@ -38,7 +37,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { Deck, Slide, MassSetup, Section, LayoutType } from '@/lib/types';
-import { mockDecks, mockVerses } from '@/lib/mock-data';
+import { mockDecks } from '@/lib/mock-data';
 import { Checkbox } from '@/components/ui/checkbox';
 
 type QueueItem = Slide & { queueId: string };
@@ -121,14 +120,6 @@ export default function DivineDeckPresenter() {
           }
         });
       });
-    });
-    mockVerses.forEach(verse => {
-      if (verse.title.toLowerCase().includes(lowerCaseSearchTerm) || (verse.contents && verse.contents.join(' ').toLowerCase().includes(lowerCaseSearchTerm))) {
-         if (!addedItems.has(`slide-${verse.id}`)) {
-            results.push({ type: 'slide', data: verse });
-            addedItems.add(`slide-${verse.id}`);
-         }
-      }
     });
     return results;
   }, [searchTerm, decks]);
@@ -420,9 +411,6 @@ export default function DivineDeckPresenter() {
             <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => toast({ title: "Importing...", description: "This feature is for demonstration."})}>
                     <FilePlus className="mr-2 h-4 w-4"/> Import .pptx
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => toast({ title: "Importing...", description: "This feature is for demonstration."})}>
-                    <BookOpen className="mr-2 h-4 w-4"/> Import Verses
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleSaveSetup}><Save className="mr-2 h-4 w-4"/> Save Setup</Button>
                 <Dialog>

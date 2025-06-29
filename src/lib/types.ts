@@ -7,7 +7,7 @@ export interface Slide {
   layoutType: LayoutType;
   notes?: string;
   hidden?: boolean;
-  type: 'slide' | 'verse';
+  type: 'slide';
   source: string;
   dataAiHint?: string;
 }

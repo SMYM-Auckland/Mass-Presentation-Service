@@ -60,8 +60,3 @@ export const mockDecks: Deck[] = [
     ]
   }
 ];
-
-export const mockVerses = [
-    { id: 'v-1', type: 'verse', source: 'VerseView', title: 'John 3:16', contents: ['For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.'], layoutType: '1-col'},
-    { id: 'v-2', type: 'verse', source: 'VerseView', title: 'Proverbs 3:5-6', contents: ['Trust in the Lord with all your heart, and do not lean on your own understanding. In all your ways acknowledge him, and he will make straight your paths.'], layoutType: '1-col'}
-] as any[]; // Using any to fit into Slide[] type easily
