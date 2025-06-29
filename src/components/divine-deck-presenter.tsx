@@ -440,6 +440,16 @@ export default function DivineDeckPresenter() {
                                         <AccordionItem value={section.id}>
                                             <AccordionTrigger>{section.title}</AccordionTrigger>
                                             <AccordionContent>
+                                                <div className="px-1 py-2">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="w-full"
+                                                        onClick={() => handleAddSectionToQueue(section)}
+                                                    >
+                                                        <Plus className="mr-2 h-4 w-4"/> Add All ({section.slides.length}) to Queue
+                                                    </Button>
+                                                </div>
                                                 {section.slides.map(slide => (
                                                 <div key={slide.id} className="flex items-center gap-2 p-1 rounded hover:bg-muted">
                                                     {slide.hidden && <EyeOff className="h-4 w-4 text-muted-foreground shrink-0"/>}
